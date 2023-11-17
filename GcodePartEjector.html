@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html>
+<!-- Made by timbelmon -->
+<!-- https://github.com/timbelmon -->
+
+<!-- Extruder Head Offsets will need to be adjusted for each printer. You can find them using Ctrl+F "Extruder Head Offset". -->
+<!-- This Script is in desperate need of some good css, web designers are welcome to PR -->
+
+<head>
+  <title>Automatic Part Ejector</title>
+  <meta charset="utf-8">
+  
+</head>
+
+<body>
+  <!-- this is my personal logo -->
+  <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+  width="5%" height="5%" viewBox="20 -100 500.000000 500.000000"
+  preserveAspectRatio="xMidYMid meet">
+ 
+ <g transform="translate(0.000000,500.000000) scale(0.120000,-0.120000)"
+ fill="#000000" stroke="none">
+ <path d="M2420 4354 c-41 -27 -1080 -1067 -1096 -1096 -8 -15 -14 -42 -14 -60
+ 0 -30 49 -82 578 -611 335 -337 591 -585 610 -593 27 -12 37 -12 65 0 18 8
+ 262 245 580 563 539 540 547 549 547 588 0 39 -8 48 -593 632 -640 641 -614
+ 619 -677 577z"/>
+ <path d="M1608 2532 c-72 -74 -86 -110 -73 -179 6 -33 60 -92 433 -467 235
+ -235 445 -441 466 -457 31 -23 50 -29 88 -29 27 0 61 6 76 14 15 8 215 203
+ 444 433 364 366 417 423 423 456 13 67 -1 102 -67 173 l-61 65 -336 -334
+ c-297 -295 -342 -336 -385 -351 -58 -19 -103 -20 -160 -4 -35 10 -98 68 -412
+ 380 l-370 369 -66 -69z"/>
+ <path d="M1858 1702 c-26 -26 -51 -58 -56 -73 -23 -58 -13 -70 332 -417 182
+ -184 343 -340 358 -348 15 -8 42 -14 60 -14 30 0 64 31 365 333 l333 332 0 43
+ c0 39 -6 50 -57 103 -31 32 -61 59 -67 59 -6 0 -103 -93 -216 -206 -237 -237
+ -267 -258 -375 -259 -127 0 -141 9 -400 266 l-231 229 -46 -48z"/>
+ </g>
+ </svg>
+ 
+  <h1>Automatic Part Ejector</h1>
+  <h2>Upload Gcode then choose Parameters.<br>Part-Ejecting Gcode will be downloaded automatically.</h2>
+  
+  <div id="interface">
+  <input type="file" id="input-file" accept=".gcode"><br><br>
+  Number of Prints: <input type="number" id="loops" name="loops" placeholder="Stückzahl" min="1" value="1"><br>
+  Ejecting-Speed: <input type="number" id="movementSpeed" placeholder="Vorschub" min="0" value="1200"><br><br>
+  <input type="checkbox" id="checkboxHeatbed">Wait for Heatbed to cool down.<br>
+  Goal-Temperature: <input disabled type="number" id="heatbed" name="heatbed" placeholder="Heizbett Temperatur" min="20" value="30">
+  
+  <br><br>
+
+  <input type="checkbox" id="checkboxManual">Manual Move<br>
+  <div id="inputFields">
+    Start X: <input disabled type="number" id="startX1" class="manualInput" placeholder="Start X" min="0" value="0">
+    Start Y: <input disabled type="number" id="startY1" class="manualInput" placeholder="Start Y" min="0" value="0">
+    Start Z: <input disabled type="number" id="startZ1" class="manualInput" placeholder="Start Z" min="0" value="0">
+    <br>
+    Goal X: <input disabled type="number" id="goalX1" class="manualInput" placeholder="Ziel X" min="0" value="0">
+    Goal Y: <input disabled type="number" id="goalY1" class="manualInput" placeholder="Ziel Y" min="0" value="0">
+    Goal Z: <input disabled type="number" id="goalZ1" class="manualInput" placeholder="Ziel Z" min="0" value="0">
+    <br>
+  </div>
+  <button id="removeMove" class="manualInput" disabled>-</button>
+  <button id="addMove" class="manualInput" disabled>+</button><br>
+
+  <button id="combine-btn">Generate Gcode</button><br><br><br>
+  <p id="status"></p><br>
+  
+  <table>
+		<tbody>
+			<tr>
+				<td><p id="weightSingle"></p></td>
+				<td><p id="weightCombined"></p></td>
+			</tr>
+			<tr>
+				<td><p id="timeSingle"></p></td>
+				<td><p id="timeCombined"></p></td>
+			</tr>
+		</tbody>
+   </table>
+  </div>
+  <script>
+    const combineBtn = document.getElementById('combine-btn');
+    const inputFile = document.getElementById('input-file');
+    const status = document.getElementById('status');
+
+    const checkboxHeatbed = document.getElementById('checkboxHeatbed');
+    const heatbed = document.getElementById('heatbed');
+
+    checkboxHeatbed.addEventListener('change', function () {
+      heatbed.disabled = !this.checked;
+    });
+
+    const checkboxManual = document.getElementById('checkboxManual');
+    const manualInputs = document.getElementsByClassName('manualInput');
+    const movementSpeed = document.getElementById('movementSpeed');
+
+
+    checkboxManual.addEventListener('change', function () {
+      for (const input of manualInputs) {
+        input.disabled = !this.checked;
+      }
+    });
+
+
+    let count = 1;
+
+    document.querySelector("#addMove").addEventListener("click", function () {
+      count++;
+      const inputFields = document.querySelector("#inputFields");
+      const newInputFields = document.createElement("div");
+      newInputFields.innerHTML = `
+      <br>Move ${count}<br>
+      Start X: <input disabled type="number" id="startX${count}" class="manualInput" placeholder="Start X" min="0" value="0">
+      Start Y: <input disabled type="number" id="startY${count}" class="manualInput" placeholder="Start Y" min="0" value="0">
+      Start Z: <input disabled type="number" id="startZ${count}" class="manualInput" placeholder="Start Z" min="0" value="0">
+      <br>
+      Ziel X: <input disabled type="number" id="goalX${count}" class="manualInput" placeholder="Ziel X" min="0" value="0">
+      Ziel Y: <input disabled type="number" id="goalY${count}" class="manualInput" placeholder="Ziel Y" min="0" value="0">
+      Ziel Z: <input disabled type="number" id="goalZ${count}" class="manualInput" placeholder="Ziel Z" min="0" value="0">
+      <br>
+    `;
+      inputFields.appendChild(newInputFields);
+
+      checkboxManual.dispatchEvent(new Event("change"));
+    });
+
+    document.querySelector("#removeMove").addEventListener("click", function () {
+      if (count > 1) {
+        const inputFields = document.querySelector("#inputFields");
+        const removedInputFields = inputFields.lastElementChild;
+        inputFields.removeChild(removedInputFields);
+        count--;
+      }
+    });
+
+
+
+    combineBtn.addEventListener('click', () => {
+      status.innerHTML = "Please upload Gcode-File and choose number of Parts.";
+      // Get the selected file
+      const file = inputFile.files[0];
+      status.innerHTML = "Generating Gcode...";
+      // Create a new FileReader instance
+      const reader = new FileReader();
+      reader.onload = function () {
+        // get the content of the file
+        const gcode = this.result;
+        const loops = document.getElementById('loops').value;
+
+        let oldBedTemp = "";
+        let L_start = "";
+        let L_print = "";
+        let L_end = "";
+        let flag = 0;
+        const lines = gcode.split(/\r?\n/);
+        for (let i = 0; i < lines.
+          length; i++) {
+          let line = lines[i];
+          if (flag == 0 && line.includes("M190")) {
+            oldBedTemp = line;
+          }
+          else if ((flag == 0 || flag == 4) && (line.includes("; printing object"))) { // you can add/change this depending on your gcode
+            flag = 1;
+          } else if (flag == 1 && (line.includes("; Filament-specific end gcode") || line.includes(";TIME_ELAPSED:"))) { // you can add/change this depending on your gcode
+            flag = 2;
+          }
+          else if (flag == 2 && line.includes("; total filament used [g] =")) { // you can add/change this depending on your gcode
+            const weightSingle = document.getElementById('weightSingle');
+            const weightCombined = document.getElementById('weightCombined');
+            weightSingle.innerHTML = "Filament used (per Part):" + line.split("=")[1] + "g";
+            weightCombined.innerHTML = "Filament used (whole File): " + (line.split("=")[1] * loops) + "g";
+          }
+          else if (flag == 2 && line.includes("; estimated printing time")) { // you can add/change this depending on your gcode
+            const timeSingle = document.getElementById('timeSingle');
+            const timeCombined = document.getElementById('timeCombined');
+            timeSingle.innerHTML = "Estimated printing time (per Part):" + line.split("=")[1];
+            timeCombined.innerHTML = "Estimated printing time (whole File):" + multiplyTime(line.split("=")[1], loops);
+          }
+          else if (line.includes(";TYPE:Skirt/Brim")) {
+            flag = 4;
+          }
+
+          if (flag === 0) {
+            L_start += line + '\n';
+          } else if (flag === 1) {
+            L_print += line + '\n';
+          } else if (flag === 2) {
+            L_end += line + '\n';
+          }
+        }
+
+
+
+        if (flag == 2) {
+          let { medianX, maxZ, maxY } = getMedianXAndMaxZY(L_print);
+          // Following Offsets need to be Customized for each Printer. Should probably have their own input Fields/Constants.
+          maxZ = parseInt(maxZ) + 3; // Extruder Head Offset Z
+          maxY = parseInt(maxY) + 75; // Extruder Head Offset Y
+          medianX = parseInt(medianX) - 16.5; // Extruder Head Offset X
+
+
+
+
+          L = L_start;
+          let blobParts = [L_start];
+
+          for (let j = 0; j < loops; j++) {
+            // Append loop print section to blobParts
+            blobParts.push(L_print);
+            // Insert lines between prints
+            blobParts.push("G91 ; set relative mode\n");
+            blobParts.push("G0 Z3 ; move printhead up\n");
+            blobParts.push("G90 ; set absolute mode\n");
+            if (checkboxHeatbed.checked) {
+              blobParts.push("M190 R" + heatbed.value + " ; set bed temp and wait\n");
+            }
+            if (checkboxManual.checked) {
+              for (let i = 1; i <= count; i++) {
+                const startX = document.getElementById('startX' + i);
+                const startY = document.getElementById('startY' + i);
+                const startZ = document.getElementById('startZ' + i);
+                const goalX = document.getElementById('goalX' + i);
+                const goalY = document.getElementById('goalY' + i);
+                const goalZ = document.getElementById('goalZ' + i);
+
+                if (i > 1) {
+                  blobParts.push("G1 Z" + maxZ + " F600 ; move printhead up\n");
+                }
+
+                blobParts.push("G1 X" + startX.value + " Y" + startY.value + " F" + movementSpeed.value + "; move printhead back\n");
+                blobParts.push("G1 Z" + startZ.value + " F600; move printhead down\n");
+                blobParts.push("G1 X" + goalX.value + " Y" + goalY.value + " Z" + goalZ.value + " F" + movementSpeed.value + "; push model with printhead\n");
+              }
+            } else {
+              blobParts.push("G1 X" + medianX + " Y" + maxY + " F" + movementSpeed.value + "; move printhead back\n");
+              blobParts.push("G1 Z1 F600; move printhead down\n");
+              blobParts.push("G1 X" + medianX + " Y0 F" + movementSpeed.value + "; push model with printhead\n");
+            }
+
+            if (checkboxHeatbed.checked) {
+              blobParts.push(oldBedTemp + "\n");
+            }
+          }
+
+          blobParts.push(L_end);
+          const myBlob = new Blob(blobParts, { type: 'text/plain' });
+
+          status.innerHTML = "Download started...";
+          // Create a link element to trigger the download
+          const downloadLink = document.createElement('a');
+          // Set the href attribute for the link
+          downloadLink.href = URL.createObjectURL(myBlob);
+          downloadLink.download = loops + "x" + file.name;
+          // Append the link to the body
+          document.body.appendChild(downloadLink);
+          // Trigger the click event to start the download
+          downloadLink.click();
+          // Remove the link after the download
+          document.body.removeChild(downloadLink);
+        }
+
+
+
+        else {
+          status.innerHTML = "Problem occured during Gcode extraction.";
+        }
+      };
+      reader.readAsText(file);
+    });
+
+
+    function multiplyTime(timeString, loops) {
+      const timeComponents = timeString.split(' ');
+      let totalSeconds = 0;
+
+      for (const timeComponent of timeComponents) {
+        const number = parseInt(timeComponent.slice(0, -1));
+        const unit = timeComponent.slice(-1);
+
+        if (unit === 'h') {
+          totalSeconds += number * 60 * 60;
+        } else if (unit === 'm') {
+          totalSeconds += number * 60;
+        } else if (unit === 's') {
+          totalSeconds += number;
+        }
+      }
+
+      totalSeconds *= loops;
+
+      const hours = Math.floor(totalSeconds / 3600);
+      totalSeconds %= 3600;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+
+      return `${hours}h ${minutes}m ${seconds}s`;
+
+    }
+
+    function getMedianXAndMaxZY(gcode) {
+      const g1Commands = gcode.match(/G1 [^;]*/g);
+      let xValues = [];
+      let yValues = [];
+      let zValues = [];
+
+      g1Commands.forEach((command) => {
+        const matchX = command.match(/X\s*([\d\.e+-]*)/i);
+        if (matchX) {
+          const xValue = parseFloat(matchX[1]);
+          if (!isNaN(xValue)) {
+            xValues.push(xValue);
+          }
+        }
+
+        const matchY = command.match(/Y\s*([\d\.e+-]*)/i);
+        if (matchY) {
+          const yValue = parseFloat(matchY[1]);
+          if (!isNaN(yValue)) {
+            yValues.push(yValue);
+          }
+        }
+
+        const matchZ = command.match(/Z\s*([\d\.e+-]*)/i);
+        if (matchZ) {
+          const zValue = parseFloat(matchZ[1]);
+          if (!isNaN(zValue)) {
+            zValues.push(zValue);
+          }
+        }
+      });
+
+      const maxX = xValues.length > 0 ? Math.max(...xValues) : undefined;
+      const minX = xValues.length > 0 ? Math.min(...xValues) : undefined;
+      const maxY = yValues.length > 0 ? Math.max(...yValues) : -Infinity;
+	  
+      const medianX = maxX !== undefined && minX !== undefined ? (maxX + minX) / 2 : undefined;
+      const maxZ = zValues.length > 0 ? Math.max(...zValues) : -Infinity;
+
+      return { medianX, maxZ, maxY };
+    }
+
+
+  </script>
+  <style>
+    body {
+      color: #000;
+      font-family: var(--font-family-head, vw-head, Helvetica, Arial, sans-serif);
+    }
+	
+	#interface{
+	  text-align: center;
+	}
+
+    .container {
+      padding: 20px;
+      border-radius: 10px;
+      background-color: #2c2f33;
+      width: 50%;
+      margin: auto;
+    }
+	
+	.manualInput {
+	 width: 60px;
+	}
+	
+
+    input {
+      font-size: 20px;
+      color: #000;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+      font-size: 40px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 20px;
+      width: 100%;
+    }
+
+    svg {
+      transform: scale(3);
+      position: absolute;
+      left: 50px;
+      top: 50px;
+      z-index: 1;
+    }
+	
+	table{
+	  margin-left: auto;
+	  margin-right: auto;
+	}
+	
+	th, td {
+	  text-align: left;
+	  padding-left: 20px;
+	}
+
+    #combine-btn {
+      font-size: 20px;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      border: none;
+      border-radius: 5px;
+      background-color: #000;
+      color: #fff;
+      padding: 10px 20px;
+      margin-top: 20px;
+    }
+
+    #combine-btn:hover {
+      background: rgb(0, 30, 80);
+      cursor: pointer;
+    }
+
+    #status {
+      text-align: center;
+      margin-top: 20px;
+    }
+	
+  </style>
+</body>
+
+</html>
