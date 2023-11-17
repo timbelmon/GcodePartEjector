@@ -5,5 +5,7 @@ This Project is still WIP but it is functional. You need to use Gcode made with 
 This Script uses known points for figuring out the Gcode, im aware some of these Points have changed with the release of the Mk4 with Input shaping, this will need to be added / adjusted.
 I hate CSS and it shows, feel free to improve and PR.
 
+!!! - Extruder Head Offsets will need to be adjusted for each printer. You can find them using Ctrl+F "Extruder Head Offset". You can find out these Values by Measuring your Printhead. - !!!
+
 If youre confused what this code does:
 https://www.youtube.com/watch?v=01QJgSK_tZE
