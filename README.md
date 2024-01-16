@@ -7,5 +7,7 @@ I hate CSS and it shows, feel free to improve and PR.
 
 !!! - Extruder Head Offsets will need to be adjusted for each printer. You can find them using Ctrl+F "Extruder Head Offset". You can find out these Values by Measuring your Printhead. - !!!
 
+Please use a Brim to prime the Nozzle as the prime line should be removed automatically.
+
 If youre confused what this code does:
 https://www.youtube.com/watch?v=01QJgSK_tZE
