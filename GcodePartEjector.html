@@ -208,9 +208,8 @@
             // Append loop print section to blobParts
             blobParts.push(L_print);
             // Insert lines between prints
-            blobParts.push("G91 ; set relative mode\n");
-            blobParts.push("G0 Z3 ; move printhead up\n");
-            blobParts.push("G90 ; set absolute mode\n");
+	    blobParts.push("G1 Z"+maxZ+" ; move printhead up\n");
+
             if (checkboxHeatbed.checked) {
               blobParts.push("M190 R" + heatbed.value + " ; set bed temp and wait\n");
             }
